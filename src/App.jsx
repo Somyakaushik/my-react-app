@@ -23,7 +23,7 @@ function App() {
     try {
       const usersCollection = collection(db, 'users');
       await addDoc(usersCollection, user);
-      setMessage('✅ Login successful. Data saved to Firestore.');
+      setMessage('✅ Login successful. Data saved to Firestore!!');
       setUser({ name: '', email: '', password: '' });
     } catch (error) {
       setMessage('❌ Error: ' + error.message);
