@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import './App.css';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase-config';
 
 function App() {
@@ -17,24 +17,54 @@ function App() {
       const usersRef = collection(db, 'users');
       const querySnapshot = await getDocs(usersRef);
 
-      let found = false;
+      let matchedUserDoc = null;
+      let matchedUserData = null;
 
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        if (data.email === email && data.password === password) {
-          found = true;
-          // Save session
-          localStorage.setItem('user', JSON.stringify(data));
-          setLoggedIn(true);
+      querySnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data.email === email) {
+          matchedUserDoc = docSnap;
+          matchedUserData = data;
         }
       });
 
-      if (!found) {
+      if (matchedUserDoc) {
+        const loginAttemptRef = collection(db, 'users', matchedUserDoc.id, 'loginAttempts');
+
+        if (matchedUserData.password === password) {
+          localStorage.setItem('user', JSON.stringify(matchedUserData));
+          setLoggedIn(true);
+
+          await addDoc(loginAttemptRef, {
+            status: 'success',
+            email,
+            timestamp: serverTimestamp(),
+          });
+        } else {
+          setError('Invalid email or password');
+
+          await addDoc(loginAttemptRef, {
+            status: 'failure',
+            email,
+            reason: 'Incorrect password',
+            timestamp: serverTimestamp(),
+          });
+        }
+      } else {
         setError('Invalid email or password');
+
+        // 🔴 This logs login attempt for an unknown user
+        const unknownRef = collection(db, 'loginAttempts_unknown');
+        await addDoc(unknownRef, {
+          email,
+          status: 'failure',
+          reason: 'Email not found',
+          timestamp: serverTimestamp(),
+        });
       }
     } catch (err) {
+      console.error('Login error:', err);
       setError('Something went wrong. Try again.');
-      console.error(err);
     }
   };
 
