@@ -57,14 +57,14 @@ function App() {
           <h2>Login</h2>
           <input
             type="email"
-            placeholder="Email"
+            placeholder="jane@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
           /><br />
           <input
             type="password"
-            placeholder="Password"
+            placeholder="***"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
