@@ -9,64 +9,88 @@ function App() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [error, setError] = useState('');
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setError('');
+const handleLogin = async (e) => {
+  e.preventDefault();
+  setError('');
 
-    try {
-      const usersRef = collection(db, 'users');
-      const querySnapshot = await getDocs(usersRef);
+  try {
+    const usersRef = collection(db, 'users');
+    const querySnapshot = await getDocs(usersRef);
 
-      let matchedUserDoc = null;
-      let matchedUserData = null;
+    let matchedUserDoc = null;
+    let matchedUserData = null;
 
-      querySnapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (data.email === email) {
-          matchedUserDoc = docSnap;
-          matchedUserData = data;
-        }
-      });
+    // Find user with matching email
+    querySnapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      if (data.email === email) {
+        matchedUserDoc = docSnap;
+        matchedUserData = data;
+      }
+    });
 
-      if (matchedUserDoc) {
-        const loginAttemptRef = collection(db, 'users', matchedUserDoc.id, 'loginAttempts');
+    if (matchedUserDoc) {
+      const userId = matchedUserDoc.id;
 
-        if (matchedUserData.password === password) {
-          localStorage.setItem('user', JSON.stringify(matchedUserData));
-          setLoggedIn(true);
+      if (matchedUserData.password === password) {
+        // ✅ SUCCESSFUL login
+        localStorage.setItem('user', JSON.stringify(matchedUserData));
+        setLoggedIn(true);
 
-          await addDoc(loginAttemptRef, {
-            status: 'success',
-            email,
-            timestamp: serverTimestamp(),
-          });
-        } else {
-          setError('Invalid email or password');
+        // Log to top-level "loginAttempts_successful"
+        await addDoc(collection(db, 'loginAttempts_successful'), {
+          userId,
+          email,
+          status: 'success',
+          timestamp: serverTimestamp(),
+        });
 
-          await addDoc(loginAttemptRef, {
-            status: 'failure',
-            email,
-            reason: 'Incorrect password',
-            timestamp: serverTimestamp(),
-          });
-        }
+        // Optional: also log in user's own subcollection
+        await addDoc(collection(db, 'users', userId, 'loginAttempts'), {
+          status: 'success',
+          email,
+          timestamp: serverTimestamp(),
+        });
+
       } else {
+        // ❌ WRONG PASSWORD
         setError('Invalid email or password');
 
-        // 🔴 This logs login attempt for an unknown user
-        const unknownRef = collection(db, 'loginAttempts_unknown');
-        await addDoc(unknownRef, {
+        await addDoc(collection(db, 'loginAttempts_failed'), {
+          userId,
           email,
           status: 'failure',
-          reason: 'Email not found',
+          reason: 'Incorrect password',
+          timestamp: serverTimestamp(),
+        });
+
+        // Optional: also log in user's own subcollection
+        await addDoc(collection(db, 'users', userId, 'loginAttempts'), {
+          status: 'failure',
+          reason: 'Incorrect password',
+          email,
           timestamp: serverTimestamp(),
         });
       }
-    } catch (err) {
-      console.error('Login error:', err);
-      setError('Something went wrong. Try again.');
+
+    } else {
+      // ❌ EMAIL NOT FOUND
+      setError('Invalid email or password');
+
+      await addDoc(collection(db, 'loginAttempts_unknown'), {
+        email,
+        status: 'failure',
+        reason: 'Email not found',
+        timestamp: serverTimestamp(),
+      });
     }
-  };
+
+  } catch (err) {
+    console.error('Login error:', err);
+    setError('Something went wrong. Try again.');
+  }
+};
+
 
   const handleLogout = () => {
     localStorage.removeItem('user');
